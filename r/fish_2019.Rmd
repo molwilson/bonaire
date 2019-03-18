@@ -1,0 +1,122 @@
+---
+title: "Fish 2019"
+author: "Molly Wilson"
+date: "3/16/2019"
+output: html_document
+---
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(here)
+library(janitor)
+```
+
+
+```{r, echo=F, warning=F, message=F}
+fish <- read.csv(here('data','raw_2019.csv'), stringsAsFactors = F) %>% 
+  clean_names() %>%
+  mutate(number = replace_na(number, 1)) %>%
+  uncount(number) %>% # expand to replicate rows if multiple fish were recorded
+  mutate(year = as.factor(year))
+
+herb_hist <- read_csv((here('data','herb_2011-2017.csv'))) %>% 
+  clean_names() %>%
+  select(c(year, site, transect, code, species, family, length_cm, phase, biomass))
+carn_hist <- read_csv((here('data','carn_2015-2017.csv'))) %>% 
+  clean_names() %>%
+  select(c(year, site, transect, code, species, family, length_cm, biomass))
+```
+
+# Herbivores
+
+```{r,message=FALSE,warning=FALSE}
+# merging historic and 2019 herbivore data:
+herb_fam <- c("Scaridae","Acanthuridae") # families of interest
+herb <- rbind(herb_hist, 
+              fish %>% select(c(year, site, transect, code, species, family, length_cm, phase, biomass))) %>% 
+  filter(family %in% herb_fam) %>%
+  mutate(management = ifelse(site == "Calabas" | site == "Front Porch" | site == "Eighteenth Palm" | site == "Reef Scientifico", "FPA", "Control")) %>% 
+  mutate(site = fct_relevel(site, "Bachelor's Beach", "Windsock", "Eighteenth Palm", "Calabas", "Front Porch", "Forest", "Reef Scientifico", "Barcadera", "Oil Slick", "Karpata", "No-Dive Reserve"))
+
+# averages by site and year:
+herb.tran <- herb %>% 
+  filter(biomass != 0) %>% 
+  group_by(year, site, transect) %>% 
+  summarize(bm_t = sum(biomass)/1.2, 
+            den_t = n()/1.2, 
+            l_t = mean(length_cm))
+herb.site <- herb.tran %>% 
+  group_by(year, site) %>% 
+  summarize(n = n(), 
+            bm_s = mean(bm_t), bm_se = (sd(bm_t))/sqrt(n), 
+            den_s = mean(den_t), den_se = (sd(den_t))/sqrt(n), 
+            l_s = mean(l_t), l_se = (sd(l_t))/sqrt(n)) # average across transects within each site
+herb.yr <- herb.site %>% 
+  group_by(year) %>% 
+  summarize(n = n(), 
+            bm_av = mean(bm_s), bm_se=(sd(bm_s))/sqrt(n), 
+            den_av = mean(den_s), den_se = (sd(den_s))/sqrt(n), 
+            l_av = mean(l_s), l_se = (sd(l_s))/sqrt(n))
+
+# herb.bonav <- herb.bonav %>% mutate(site = "Bonaire Average") %>% rename(bm_s = bm_av, den_s = den_av, l_s = l_av) %>% bind_rows(herb.site)
+```
+
+```{r}
+dodge <- position_dodge(width=0.9)
+ggplot(herb.site, aes(x=site, y = bm_s, group = year, fill = year)) +
+ geom_bar(position = dodge, stat = "identity") + 
+  geom_errorbar(aes(ymax = bm_s + bm_se, ymin = bm_s - bm_se), position = dodge, width = 0.25) +
+  ggtitle("Total Herbivore Biomass by Site, 2011-2019") +
+  ylab("Biomass (g/100m2)") +
+  scale_fill_manual(values = c("slategray1","slategray2","slategray3","slategray","grey15")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), plot.title = element_text(hjust = 0.5))
+```
+
+
+# Carnivores
+
+```{r}
+# merging historic and 2019 carnivore data
+carn_grp <- c("Carnivore","Omnivore") # functional groups of interest
+carn <- rbind(carn_hist, 
+              fish %>% filter(functional_group %in% carn_grp) %>%
+                select(c(year, site, transect, code, species, family, length_cm, biomass))) %>% 
+  mutate(management = ifelse(site == "Calabas" | site == "Front Porch" | site == "Eighteenth Palm" | site == "Reef Scientifico", "FPA", "Control")) %>%
+  mutate(site = fct_relevel(site, "Bachelor's Beach", "Windsock", "Eighteenth Palm", "Calabas", "Front Porch", "Forest", "Reef Scientifico", "Barcadera", "Oil Slick", "Karpata", "No-Dive Reserve"))
+
+# averages by site and year:
+carn.tran <- carn %>% 
+  filter(biomass != 0) %>% 
+  group_by(year, site, transect) %>% 
+  summarize(bm_t = sum(biomass)/1.2, 
+            den_t = n()/1.2, 
+            l_t = mean(length_cm))
+carn.site <- carn.tran %>% 
+  group_by(year, site) %>% 
+  summarize(n = n(), 
+            bm_s = mean(bm_t), bm_se = (sd(bm_t))/sqrt(n), 
+            den_s = mean(den_t), den_se = (sd(den_t))/sqrt(n), 
+            l_s = mean(l_t), l_se = (sd(l_t))/sqrt(n))
+carn.yr <- carn.site %>% 
+  group_by(year) %>% 
+  summarize(n = n(), 
+            bm_av = mean(bm_s), bm_se=(sd(bm_s))/sqrt(n), 
+            den_av = mean(den_s), den_se = (sd(den_s))/sqrt(n), 
+            l_av = mean(l_s), l_se = (sd(l_s))/sqrt(n))
+
+```
+
+```{r}
+dodge <- position_dodge(width=0.9)
+ggplot(carn.site, aes(x=site, y = bm_s, group = year, fill = year)) +
+ geom_bar(position = dodge, stat = "identity") + 
+  geom_errorbar(aes(ymax = bm_s + bm_se, ymin = bm_s - bm_se), position = dodge, width = 0.25) +
+  ggtitle("Carnivore + Omnivore Biomass by Site, 2015-2019") +
+  ylab("Biomass (g/100m2)") +
+  scale_fill_manual(values = c("slategray1","slategray3","grey15")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), plot.title = element_text(hjust = 0.5))
+```
+

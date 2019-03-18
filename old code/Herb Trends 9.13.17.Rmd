@@ -1,0 +1,222 @@
+---
+title: "Herbivore Trends 2011-2017"
+author: "Molly Wilson"
+date: "9/10/2017"
+output: word_document
+---
+
+#### Examining trends in herbivore biomasses, densities and sizes in Bonaire from 2011-2017.  
+
+## Part 1. Setup
+
+### 1.1 Load packages
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+library(lazyeval)
+library(rmarkdown)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(grid)
+```
+
+### 1.2 Import and format files
+*required files: Raw_2011.2017.csv*
+```{r,message=FALSE,warning=FALSE}
+Raw_2011.2017 <- read.csv("~/Google Drive/Final data + code/Raw_2011-2017.csv")
+herb<-Raw_2011.2017
+herb[herb==""]  <- NA 
+herb[herb=="#NUM!"] <- NA
+herb$Phase <- tolower(herb$Phase)
+herb$Date <- as.character(herb$Date)
+herb$Family <- as.character(herb$Family)
+herb$Biomass <- as.numeric(herb$Biomass)
+herb <- herb%>% mutate(Family=replace(Family,Family=="Pomacentridae","Yellowtail Damselfish")) %>% mutate(Management = ifelse(Site == "Calabas" | Site == "Front Porch" | Site == "Eighteenth Palm" | Site == "Reef Scientifico", "FPA", "Control")) %>% mutate(Phase=replace(Phase,Phase=="j","juvenile")) %>% mutate(Phase=replace(Phase,Phase=="i","initial")) %>% mutate(Phase=replace(Phase,Phase=="t","terminal")) %>% rename(Length=length..cm.,Group=Family)
+dodge <- position_dodge(width=0.9) # set up for graphing later on
+```
+
+## Part 2. Create summary table for herbivore data
+
+### 2.1 Total herbivore populations by year and site
+
+```{r,message=FALSE,warning=FALSE}
+# by site and year:
+herb.tran<- herb %>% filter(Biomass != 0) %>% group_by(Date,Site,Transect) %>% summarize(BM.t=sum(Biomass)/1.2, DEN.t=n()/1.2, L.t=mean(Length))
+herb.site<-herb.tran %>% group_by(Date,Site) %>% summarize(n=n(), BM.s=mean(BM.t), BM.se=(sd(BM.t))/sqrt(n), DEN.s=mean(DEN.t), DEN.se=(sd(DEN.t))/sqrt(n), L.s=mean(L.t), L.se=(sd(L.t))/sqrt(n)) # average across transects within each site
+herb.bonav <- herb.site %>% group_by(Date) %>% summarize(n=n(), BM.av=mean(BM.s), BM.se=(sd(BM.s))/sqrt(n), DEN.av=mean(DEN.s), DEN.se=(sd(DEN.s))/sqrt(n), L.av=mean(L.s), L.se=(sd(L.s))/sqrt(n))
+herb.bonav <- herb.bonav %>% mutate(Site="Bonaire Average") %>% rename(BM.s=BM.av,DEN.s=DEN.av,L.s=L.av) %>% bind_rows(herb.site)
+```
+
+### 2.2 Herbivore populations by species, year and site
+Creating template of all possible species/transect combinations in order to add biomass/density=0 in transects where a species was not present
+```{r,message=FALSE,warning=FALSE}
+expand.tran <- herb %>% group_by(Date,Site,Transect) %>% summarize()
+expand.species <- herb %>% expand(Species,Site,Date)
+temp.species <- full_join(expand.species,expand.tran,by=c("Date","Site"))
+```
+
+Use template to make summary table
+```{r,message=FALSE,warning=FALSE}
+# by site and species:
+species.tran<- herb %>% filter(Biomass != 0) %>% group_by(Date,Site,Transect,Species) %>% summarize(BM.t=sum(Biomass)/1.2, DEN.t=n()/1.2) %>% right_join(temp.species, by=c("Date","Site","Transect","Species")) # join with template containing all possible species/transect combinations, will create NA values in transects where a species was not present
+species.tran[is.na(species.tran)] <- 0 # convert NAs to 0 biomass/density in transects where a species is not present
+species.site<-species.tran %>% group_by(Date,Site,Species) %>% summarize(n=n(), BM.s=mean(BM.t), BM.se=(sd(BM.t))/sqrt(n), DEN.s=mean(DEN.t), DEN.se=(sd(DEN.t))/sqrt(n)) # average across transects within each site
+species.L.tran <- herb %>% group_by(Date,Site,Transect,Species) %>% summarize(L.t=mean(Length)) # average length must be calculated separately because transects without a species representative does not mean average length will be 0
+species.L.site<-species.L.tran %>% group_by(Date,Site,Species) %>% summarize(L.n=n(),L.s=mean(L.t), L.se=(sd(L.t))/sqrt(L.n))
+species.site <- species.site %>% left_join(species.L.site) # sample size will be different for length (L.n - only transects where species was observed) vs. biomass/density (n - all transects) calculations
+# adding yearly Bonaire average, by species
+species.bonav <- species.site %>% group_by(Date,Species) %>% summarize(n=n(), BM.av=mean(BM.s), BM.se=(sd(BM.s))/sqrt(n), DEN.av=mean(DEN.s), DEN.se=(sd(DEN.s))/sqrt(n))
+species.L.bonav <- species.L.site %>% group_by(Date,Species) %>% summarize(L.n=n(),L.av=mean(L.s), L.se=(sd(L.s))/sqrt(L.n))
+species.bonav <- species.bonav %>% left_join(species.L.bonav) %>% mutate(Site="Bonaire Average") %>% rename(BM.s=BM.av,DEN.s=DEN.av,L.s=L.av) %>% bind_rows(species.site)
+```
+
+### 2.3 Herbivore trends by group (Scards, Acanthurds, and YTDs), year and site
+Creating template of all possible family/transect combinations in order to add biomass/density=0 in transects where a species was not present
+```{r,message=FALSE,warning=FALSE}
+group <- herb %>% group_by(Date, Group) %>% summarize() # 3 family categories for each year
+temp.group <- full_join(group, expand.tran, by="Date")
+```
+
+Use template to make summary table
+```{r,message=FALSE,warning=FALSE}
+# by site and species group:
+group.tran<- herb %>% filter(Biomass != 0) %>% group_by(Date,Site,Transect,Group) %>% summarize(BM.t=sum(Biomass)/1.2, DEN.t=n()/1.2) %>% right_join(temp.group, by=c("Date","Site","Transect","Group")) # join with template containing all possible species/transect combinations, will create NA values in transects where a species was not present
+group.tran[is.na(group.tran)] <- 0 # convert NAs to 0 biomass/density in transects where a species is not present
+group.site<-group.tran %>% group_by(Date,Site,Group) %>% summarize(n=n(), BM.s=mean(BM.t), BM.se=(sd(BM.t))/sqrt(n), DEN.s=mean(DEN.t), DEN.se=(sd(DEN.t))/sqrt(n)) # average across transects within each site
+group.bonav <- group.site %>% group_by(Date,Group) %>% summarize(n=n(), BM.av=mean(BM.s), BM.se=(sd(BM.s))/sqrt(n), DEN.av=mean(DEN.s), DEN.se=(sd(DEN.s))/sqrt(n))
+
+group.L.tran <- herb %>% group_by(Date,Site,Transect,Group) %>% summarize(L.t=mean(Length)) # average length must be calculated separately because transects without a species representative does not mean average length will be 0
+group.L.site<-group.L.tran %>% group_by(Date,Site,Group) %>% summarize(L.n=n(),L.s=mean(L.t), L.se=(sd(L.t))/sqrt(L.n))
+group.L.bonav <- group.L.site %>% group_by(Date,Group) %>% summarize(L.n=n(),L.av=mean(L.s), L.se=(sd(L.s))/sqrt(L.n))
+
+group.site <- group.site %>% left_join(group.L.site) # sample size will be different for length (L.n - only transects where species was observed) vs. biomass/density (n - all transects) calculations
+# adding yearly Bonaire average, by species
+group.bonav <- group.bonav %>% left_join(group.L.bonav) %>% mutate(Site="Bonaire Average") %>% rename(BM.s=BM.av,DEN.s=DEN.av,L.s=L.av) %>% bind_rows(group.site)
+```
+
+## Part 3. Graphing trends in herbivore populations
+
+### 3.1 Total herbivore biomass (g/100m2) by site
+```{r, warning=FALSE, fig.width=7.5, fig.height=5, fig.align='center'}
+herb.bonav$BM.s <- as.numeric(herb.bonav$BM.s)
+herb.bonav$BM.se <- as.numeric(herb.bonav$BM.se)
+herb.bonav$Site <- factor(herb.bonav$Site, levels = c("Bachelor's Beach","Windsock","Eighteenth Palm","Calabas","Front Porch","Forest","Reef Scientifico","Barcadera","Oil Slick","Karpata","No-Dive Reserve","Bonaire Average")) 
+BMSE <- aes(ymax = BM.s + BM.se, ymin=BM.s - BM.se)
+ggplot(herb.bonav, aes(x=Site, y = BM.s, group = Date, fill=Date)) +
+ geom_bar(position = dodge, stat = "identity") + geom_errorbar(BMSE, position= dodge, width=0.25)  +
+  ggtitle("Total Herbivore Biomass by Site, 2011-2017") +
+  ylab("Biomass (g/100m2)") +
+  scale_fill_manual(values = c("slategray1","slategray3","grey35","grey15")) +
+  geom_hline(data=filter(herb.bonav, Site=="Bonaire Average"),mapping=aes(yintercept=as.numeric(BM.s),color=Date), linetype="dashed") + scale_color_manual(values = c("slategray1","slategray3","grey35","grey15")) + theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),plot.title = element_text(hjust = 0.5))
+```
+```{r, warning=FALSE, fig.width=7.5, fig.height=5, fig.align='center'}
+# 2017 only 
+ggplot(filter(herb.bonav, Date==2017), aes(x=Site, y = BM.s)) +
+ geom_bar(stat = "identity", fill="slategray") + geom_errorbar(BMSE, position= dodge, width=0.25)  +
+  ylab("Biomass (g/100m2)") +
+  geom_hline(yintercept=4311,linetype="dashed") +  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),plot.title = element_text(hjust = 0.5), axis.title.x=element_blank())
+```
+
+### 3.2 Trends in total herbivore biomass (g/100m2) by family group
+```{r, warning=FALSE, fig.width=7.5, fig.height=5, fig.align='center'}
+# 2017 only - facetted
+group.bonav2017 <- group.bonav %>% filter(Date==2017, Group!="Yellowtail Damselfish")
+group.bonav$Site <- factor(group.bonav$Site, levels = c("Bachelor's Beach","Windsock","Eighteenth Palm","Calabas","Front Porch","Forest","Reef Scientifico","Barcadera","Oil Slick","Karpata","No-Dive Reserve","Bonaire Average")) 
+ggplot(filter(group.bonav, Date==2017, Group!="Yellowtail Damselfish"), aes(x=Site, y = BM.s, fill=Group, group=Group)) + geom_bar(stat = "identity", fill="slategray") + facet_grid(Group~.) + ylab("Biomass (g/100m2)") + geom_errorbar(BMSE, position= dodge, width=0.25) + theme_bw() + theme(axis.text.x = element_text(angle = 45, hjust = 1),plot.title = element_text(hjust = 0.5),axis.title.x=element_blank())
+```
+```{r, warning=FALSE, fig.width=7.5, fig.height=5, fig.align='center'}
+# 2017 only - stacked
+ggplot(filter(group.bonav, Date==2017), aes(Site, BM.s, fill=Group, group=Group)) + geom_bar(stat="identity") + ylab("Biomass (g/100m2)") +   scale_fill_manual(values = c("slategray3","slategray4","grey30")) +  theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1),axis.title.x=element_blank(),plot.title = element_text(hjust = 0.5))
+```
+```{r, warning=FALSE, fig.width=5, fig.height=4, fig.align='center'}
+# 2011-2017, Bonaire average - stacked
+ggplot(filter(group.bonav,Site=="Bonaire Average"), aes(Date, weight=BM.s, group=Group,fill=Group)) + geom_bar(colour="black") +ylab("Biomass (g/100m2)") +   scale_fill_manual(values = c("slategray2","slategray3","slategray4"))  + theme_bw() + theme(plot.title = element_text(hjust = 0.5), axis.title.x=element_blank())
+```
+
+### 3.3 Trends in total herbivore density (#/100m2) by site
+
+```{r, warning =FALSE, fig.width=9, fig.height=4, fig.align='center'}
+DENSE <- aes(ymax = DEN.s + DEN.se, ymin=DEN.s - DEN.se)
+herb.bonav$Site <- factor(herb.bonav$Site, levels = c("Bachelor's Beach","Windsock","Eighteenth Palm","Calabas","Front Porch","Forest","Reef Scientifico","Barcadera","Oil Slick","Karpata","No-Dive Reserve","Bonaire Average"))
+ggplot(herb.bonav, aes(x=Date, y=DEN.s, group=Date, fill=Date)) + geom_bar(position=dodge, stat="identity") + facet_grid(~Site, labeller = labeller(Site = label_wrap_gen(10))) + ylab("Density (indv./100m2)") + ggtitle("Herbivore Density by Site, 2011-2017") + geom_errorbar(DENSE, position= dodge, width=0.25) + scale_fill_manual(values = c("slategray1","slategray3","grey35","grey15")) + geom_hline(aes(yintercept=DEN.s,colour=Date),filter(herb.bonav,Site=="Bonaire Average"), linetype="dashed") + scale_color_manual(values = c("slategray1","slategray3","grey35","grey15")) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1), plot.title = element_text(hjust = 0.5))
+```
+
+### 3.4 Trends in total herbivore density by family
+```{r, warning =FALSE, fig.width=7, fig.height=4, fig.align='center'}
+ggplot(filter(group.bonav,Site=="Bonaire Average"), aes(x=Date, y=DEN.s)) + geom_bar(position=dodge, stat="identity", fill="slategray4") + facet_grid(~Group) + ylab("Density (indv./100m2)") + scale_fill_brewer(palette = "YlGnBu") + ggtitle("Herbivore Density by Family") + geom_errorbar(DENSE, position= dodge, width=0.25) + theme_minimal() + theme(plot.title = element_text(hjust = 0.5))
+```
+
+## Part 4. Examination of trends in scarid populations
+
+### 4.1 Trends in total scarid densities by site
+```{r, warning =FALSE, fig.width=9, fig.height=4, fig.align='center'}
+scarid.bonav <- group.bonav %>% filter(Group=="Scaridae")
+scarid.bonav$Site <- factor(scarid.bonav$Site, levels = c("Bachelor's Beach","Windsock","Eighteenth Palm","Calabas","Front Porch","Forest","Reef Scientifico","Barcadera","Oil Slick","Karpata","No-Dive Reserve","Bonaire Average"))
+ggplot(scarid.bonav, aes(x=Date, y=DEN.s, group=Date, fill=Date)) + geom_bar(position=dodge, stat="identity") + facet_grid(.~Site, labeller = labeller(Site = label_wrap_gen(10))) + ylab("Density (indv./100m2)") + geom_errorbar(DENSE, position= dodge, width=0.25) + scale_fill_manual(values = c("slategray3","cadetblue","grey35","grey15")) + geom_hline(data=filter(scarid.bonav, Site=="Bonaire Average"), aes(yintercept=DEN.s,colour=Date), linetype="twodash", size=1) + scale_color_manual(values = c("slategray3","cadetblue","grey35","grey15")) + theme_bw() + theme(axis.text.x = element_blank(),axis.title.x=element_blank()) 
+```
+
+### 4.2 Trends in densities of dominant scarid species
+```{r, warning =FALSE, fig.width=5, fig.height=4, fig.align='center'}
+scarid.sp <- species.bonav %>% filter(Species!="Acanthurus bahianus" & Species!="Acanthurus chirurgus" & Species!="Acanthurus coeruleus" & Species!="Microspathodon chrysurus") %>% mutate(DominantSpecies = ifelse(Species=="Sparisoma viride", "Sparisoma viride", ifelse(Species== "Scarus taeniopterus","Scarus taeniopterus", ifelse(Species== "Scarus vetula","Scarus vetula", ifelse(Species== "Scarus iserti","Scarus iserti", ifelse(Species== "Sparisoma aurofrenatum","Sparisoma aurofrenatum","Other"))))))
+scarid.sp$DominantSpecies <- factor(scarid.sp$DominantSpecies, levels = c("Scarus iserti", "Scarus taeniopterus","Scarus vetula","Sparisoma aurofrenatum","Sparisoma viride", "Other")) 
+
+# yearly average densities for dominant species - stacked
+ggplot(filter(scarid.sp, Site=="Bonaire Average"), aes(Date, weight=DEN.s, group=DominantSpecies,fill=DominantSpecies)) + geom_bar() +   ylab("Density (indv./100m2)") + scale_fill_brewer(palette = "Greys") + ggtitle("Scarid Density by Species") + theme_minimal() +  theme(axis.text.x = element_text(angle = 90, hjust = 1),plot.title = element_text(hjust = 0.5))
+```
+```{r, warning =FALSE, fig.width=5, fig.height=4, fig.align='center'}
+# yearly proportional densities
+ggplot(filter(scarid.sp, Site=="Bonaire Average"), aes(Date, weight=DEN.s, group=DominantSpecies,fill=DominantSpecies)) + geom_bar(position = "fill") +   ylab("Density (indv./100m2)") + scale_fill_brewer(palette = "Greys", name="Species") + ggtitle("Proportional Scarid Density by Species") + theme_minimal() +  theme(axis.text.x = element_text(angle = 90, hjust = 1),plot.title = element_text(hjust = 0.5))
+```
+```{r, warning =FALSE, fig.width=7, fig.height=4, fig.align='center'}
+# yearly average densities for 3 dominant species - stacked
+scarid.sp3 <- filter(scarid.sp, Species == "Scarus vetula" | Species =="Sparisoma viride" | Species =="Scarus taeniopterus")
+ggplot(filter(scarid.sp3,Site=="Bonaire Average"), aes(Date, DEN.s)) + geom_bar(position=dodge, fill = "slategray", stat= "identity") + facet_grid(~Species) + geom_errorbar(DENSE, position= dodge, width=0.25)+ ylab("Density (indv./100m2)") + ggtitle("Density of Dominant Scarid Species") +theme_bw() + theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+
+### 4.3 Trends in scarid densities by phase
+
+Creating template of all possible species//phase/transect combinations in order to add biomass/density=0 in transects where a species was not present
+```{r,message=FALSE,warning=FALSE}
+expand.spec.phase  <- herb %>% filter(Group=="Scaridae") %>% expand(Species,Phase,Site,Date)
+temp.spec.phase <- full_join(expand.spec.phase, expand.tran, by=c("Date","Site")) # expansion for scarid species/phase combinations at each site
+expand.phase  <- herb %>% filter(Group=="Scaridae") %>% expand(Phase,Site,Date)
+temp.phase <- full_join(expand.phase, expand.tran, by=c("Date","Site")) # expansion for scarid phases at each site
+```
+```{r,message=FALSE,warning=FALSE}
+# by site and phase:
+phase.tran<- herb %>% filter(Phase != "NA",Group=="Scaridae") %>% group_by(Date,Site,Transect,Phase) %>% summarize(BM.t=sum(Biomass)/1.2, DEN.t=n()/1.2) %>% right_join(temp.phase, by=c("Date","Site","Transect","Phase")) # join with template containing all possible species/transect combinations, will create NA values in transects where a species was not present
+phase.tran[is.na(phase.tran)] <- 0 # convert NAs to 0 biomass/density in transects where a phase is not present
+phase.site<-phase.tran %>% group_by(Date,Site,Phase) %>% summarize(n=n(), BM.s=mean(BM.t), BM.se=(sd(BM.t))/sqrt(n), DEN.s=mean(DEN.t), DEN.se=(sd(DEN.t))/sqrt(n)) # average across transects within each site
+phase.L.tran <- herb %>% group_by(Date,Site,Transect,Phase) %>% summarize(L.t=mean(Length)) 
+phase.L.site<-phase.L.tran %>% group_by(Date,Site,Phase) %>% summarize(L.n=n(),L.s=mean(L.t), L.se=(sd(L.t))/sqrt(L.n))
+phase.site <- phase.site %>% left_join(phase.L.site) # sample size will be different for length (L.n - only transects where species was observed) vs. biomass/density (n - all transects) calculations
+# adding yearly Bonaire average, by species
+phase.bonav <- phase.site %>% group_by(Date,Phase) %>% summarize(n=n(), BM.av=mean(BM.s), BM.se=(sd(BM.s))/sqrt(n), DEN.av=mean(DEN.s), DEN.se=(sd(DEN.s))/sqrt(n))
+phase.L.bonav <- phase.L.site %>% group_by(Date,Phase) %>% summarize(L.n=n(),L.av=mean(L.s), L.se=(sd(L.s))/sqrt(L.n))
+phase.bonav <- phase.bonav %>% left_join(phase.L.bonav) %>% mutate(Site="Bonaire Average") %>% rename(BM.s=BM.av,DEN.s=DEN.av,L.s=L.av) %>% bind_rows(phase.site)
+```
+
+```{r, warning =FALSE, fig.width=7, fig.height=4, fig.align='center'}
+phase.bonav$Phase <- factor(phase.bonav$Phase, levels= c("juvenile","initial","terminal"))
+phase.bonav$Site <- factor(phase.bonav$Site, levels = c("Bachelor","Windsock","Eighteenth Palm","Calabas","Front Porch","Forest","Reef Scientifico","Barcadera","Oil Slick","Karpata","No-Dive Reserve","Bonaire Average"))
+ggplot(phase.bonav, aes(x=Date, y=DEN.s, group=interaction(Phase,Site))) + geom_bar(position=dodge, stat="identity", fill="slategray") + facet_grid(Phase~Site) + geom_errorbar(DENSE, position= dodge, width=0.25) + ylab("Density (indv./100m2)") + xlab("Year") + ggtitle("Scarid Density by Phase and Site, 2011-2017") + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1), plot.title = element_text(hjust = 0.5)) 
+```
+
+```{r, warning =FALSE, fig.width=7, fig.height=4, fig.align='center'}
+ggplot(filter(phase.bonav, Site=="Bonaire Average"), aes(x=Date, y=DEN.s, group=Phase)) + geom_bar(position=dodge, stat="identity", fill="slategray") + facet_grid(~Phase) + geom_errorbar(DENSE, position= dodge, width=0.25) + ylab("Density (indv./100m2)") + theme_bw() + theme(axis.title.x=element_blank())
+```
+
+
+## Part 5. Examining FPA effects
+
+```{r,warning=FALSE}
+mgmt.site <- herb.bonav %>% filter(Site!="Bonaire Average") %>% mutate(Management = ifelse(Site == "Calabas" | Site == "Front Porch" | Site == "Eighteenth Palm" | Site == "Reef Scientifico", "FPA", "Control"))
+mgmt.av <-mgmt.site %>% group_by(Date,Management) %>% summarize(n=n(), BM=mean(BM.s), BM.se=(sd(BM.s))/sqrt(n), DEN=mean(DEN.s), DEN.se=(sd(DEN.s))/sqrt(n))
+```
+
+```{r, warning =FALSE, fig.width=7, fig.height=4, fig.align='center'}
+BMSEmgmt <- aes(ymax = BM+BM.se, ymin=BM-BM.se)
+ggplot(data=mgmt.av, aes(x=factor(Date), y=BM, fill=Management)) + geom_bar(position=dodge, stat="identity")  +geom_errorbar(BMSEmgmt, position= dodge, width=0.25) + ylab("Biomass (g/100m2)") +scale_fill_manual(values = c("slategray2","slategray")) + theme_bw() + theme(axis.title.x=element_blank())
+```
