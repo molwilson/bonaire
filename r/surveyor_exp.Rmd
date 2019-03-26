@@ -1,0 +1,200 @@
+---
+title: "Data comparability"
+author: "Molly Wilson"
+date: "3/26/2019"
+output: html_document
+---
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(here)
+library(janitor)
+```
+
+
+```{r, echo=F, warning=F, message=F}
+fish <- read.csv(here('data','raw_2019.csv'), stringsAsFactors = F) %>% 
+  clean_names() %>%
+  mutate(number = replace_na(number, 1)) %>% # change count to 1 if number was not entered
+  uncount(number) %>% # expand to replicate rows if multiple fish were recorded
+  mutate(year = as.factor(year)) %>%
+  filter(code != "brc", code != "blc") %>% # removing chromis for consistency
+  filter(site != "Barcadera", site != "Calabas", site != "Forest") # filter out sites that MWW did not survey, plus Calabas where BDR had only 1 transect
+
+dodge <- position_dodge(width=0.9) # for bar graphs
+```
+
+```{r}
+# total fish biomass, by site and surveyor
+surv.tran <- fish %>% 
+  group_by(surveyor, site, transect) %>% 
+  summarize(bm_t = sum(biomass_fb)/1.2, 
+            den_t = n()/1.2, 
+            l_t = mean(length_cm))
+surv.site <- surv.tran %>% 
+  group_by(surveyor, site) %>% 
+  summarize(n = n(), 
+            bm_s = mean(bm_t), bm_se = (sd(bm_t))/sqrt(n), 
+            den_s = mean(den_t), den_se = (sd(den_t))/sqrt(n), 
+            l_s = mean(l_t), l_se = (sd(l_t))/sqrt(n)) # average across transects within each site
+
+# herbivore biomass, by site and surveyor
+herb_fam <- c("Scaridae","Acanthuridae") # families of interest
+h.surv.tran <- fish %>% 
+  filter(family %in% herb_fam) %>%
+  group_by(surveyor, site, transect) %>% 
+  summarize(bm_t = sum(biomass_bh)/1.2, # use Bohnsack & Harper biomass for consistency with past reports
+            den_t = n()/1.2, 
+            l_t = mean(length_cm))
+h.surv.site <- h.surv.tran %>% 
+  group_by(surveyor, site) %>% 
+  summarize(n = n(), 
+            bm_s = mean(bm_t), bm_se = (sd(bm_t))/sqrt(n), 
+            den_s = mean(den_t), den_se = (sd(den_t))/sqrt(n), 
+            l_s = mean(l_t), l_se = (sd(l_t))/sqrt(n)) # average across transects within each site
+
+# carnivore biomass, by site and surveyor
+carn_grp <- c("Carnivore","Omnivore")
+c.surv.tran <- fish %>% 
+  filter(functional_group %in% carn_grp) %>%
+  group_by(surveyor, site, transect) %>% 
+  summarize(bm_t = sum(biomass_fb)/1.2, # use Bohnsack & Harper biomass for consistency with past reports
+            den_t = n()/1.2, 
+            l_t = mean(length_cm))
+c.surv.site <- c.surv.tran %>% 
+  group_by(surveyor, site) %>% 
+  summarize(n = n(), 
+            bm_s = mean(bm_t), bm_se = (sd(bm_t))/sqrt(n), 
+            den_s = mean(den_t), den_se = (sd(den_t))/sqrt(n), 
+            l_s = mean(l_t), l_se = (sd(l_t))/sqrt(n)) # average across transects within each site
+
+```
+
+```{r}
+ttest.bm <- t.test(bm_s ~ surveyor, data = surv.site, paired = TRUE)
+ttest.bm
+
+ttest.den <- t.test(den_s ~ surveyor, data = surv.site, paired = TRUE)
+ttest.den
+```
+Paired t-test results: no significant difference between surveyors for total fish biomass nor total fish density (though nearly significant for biomass, with BDR having a higher mean than MWW)
+
+```{r, echo=F, warning=F, message=F}
+ggplot(surv.site, aes(x = site, y = bm_s, group = surveyor, fill = surveyor)) +
+ geom_bar(position = dodge, stat = "identity") + 
+  geom_errorbar(aes(ymax = bm_s + bm_se, ymin = bm_s - bm_se), position = dodge, width = 0.25) +
+  ggtitle("Total fish biomass") +
+  ylab("Biomass (g/100m2)") +
+  scale_fill_manual(values = c("slategray1","slategray")) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5), axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+```{r, echo=F, warning=F, message=F}
+ggplot(surv.site, aes(x = site, y = bm_s, group = surveyor)) +
+ geom_point(aes(color = factor(surveyor), shape = factor(surveyor))) + 
+  geom_errorbar(aes(ymax = bm_s + bm_se, ymin = bm_s - bm_se, color = factor(surveyor)), width = 0.25) +
+  ggtitle("Total fish biomass") +
+  ylab("Biomass (g/100m2)") +
+  scale_color_manual(values = c("aquamarine3","skyblue4")) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5), axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+```{r, echo=F, warning=F, message=F}
+ggplot(surv.site %>%
+         filter(site != "Barcadera", site != "Calabas", site != "Forest"),
+       aes(x = surveyor, y = bm_s, group = site)) +
+ geom_point(aes(color = factor(site), shape = factor(site))) + 
+ geom_line(aes(color = factor(site))) +
+  scale_shape_manual(values = c(0:8)) +
+  # geom_errorbar(aes(ymax = bm_s + bm_se, ymin = bm_s - bm_se, color = factor(site)), width = 0.25) +
+  ggtitle("Total fish biomass") +
+  ylab("Biomass (g/100m2)") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+```{r, echo=F, warning=F, message=F}
+ggplot(surv.site, aes(x = site, y = den_s, group = surveyor, fill = surveyor)) +
+ geom_bar(position = dodge, stat = "identity") + 
+  geom_errorbar(aes(ymax = den_s + den_se, ymin = den_s - den_se), position = dodge, width = 0.25) +
+  ggtitle("Total fish density") +
+  ylab("Density (indv./100m2)") +
+  scale_fill_manual(values = c("slategray1","slategray")) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5), axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+```{r, echo=F, warning=F, message=F}
+ggplot(surv.site %>%
+         filter(site != "Barcadera", site != "Calabas", site != "Forest"),
+       aes(x = surveyor, y = den_s, group = site)) +
+ geom_point(aes(color = factor(site), shape = factor(site))) + 
+ geom_line(aes(color = factor(site))) +
+  scale_shape_manual(values = c(0:8)) +
+  ggtitle("Total fish density") +
+  ylab("Density (indv./100m2)") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+
+Notes:
+- Bryce had a large school (130) of creole wrasse (17cm each) at Reef Scientifico
+```{r, echo=F, warning=F, message=F}
+ggplot(surv.site, aes(x = site, y = den_s, group = surveyor)) +
+ geom_point(aes(color = factor(surveyor), shape = factor(surveyor))) + 
+  geom_errorbar(aes(ymax = den_s + den_se, ymin = den_s - den_se, color = factor(surveyor)), width = 0.25) +
+  ggtitle("Total fish density") +
+  ylab("Density (indv./100m2)") +
+  scale_color_manual(values = c("aquamarine3","skyblue4")) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5), axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+```{r, echo=F, warning=F, message=F}
+ggplot(h.surv.site, aes(x = site, y = bm_s, group = surveyor, fill = surveyor)) +
+ geom_bar(position = dodge, stat = "identity") + 
+  geom_errorbar(aes(ymax = bm_s + bm_se, ymin = bm_s - bm_se), position = dodge, width = 0.25) +
+  ggtitle("Herbivore biomass") +
+  ylab("Biomass (g/100m2)") +
+  scale_fill_manual(values = c("slategray1","slategray")) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5), axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+```{r, echo=F, warning=F, message=F}
+ggplot(h.surv.site, aes(x = site, y = den_s, group = surveyor, fill = surveyor)) +
+ geom_bar(position = dodge, stat = "identity") + 
+  geom_errorbar(aes(ymax = den_s + den_se, ymin = den_s - den_se), position = dodge, width = 0.25) +
+  ggtitle("Herbivore density") +
+  ylab("Density (indv./100m2)") +
+  scale_fill_manual(values = c("slategray1","slategray")) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5), axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+```{r, echo=F, warning=F, message=F}
+ggplot(c.surv.site, aes(x = site, y = bm_s, group = surveyor, fill = surveyor)) +
+ geom_bar(position = dodge, stat = "identity") + 
+  geom_errorbar(aes(ymax = bm_s + bm_se, ymin = bm_s - bm_se), position = dodge, width = 0.25) +
+  ggtitle("Carnivore + Omnivore biomass") +
+  ylab("Biomass (g/100m2)") +
+  scale_fill_manual(values = c("slategray1","slategray")) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5), axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+```{r, echo=F, warning=F, message=F}
+ggplot(c.surv.site, aes(x = site, y = den_s, group = surveyor, fill = surveyor)) +
+ geom_bar(position = dodge, stat = "identity") + 
+  geom_errorbar(aes(ymax = den_s + den_se, ymin = den_s - den_se), position = dodge, width = 0.25) +
+  ggtitle("Carnivore + Omnivore density") +
+  ylab("Density (indv./100m2)") +
+  scale_fill_manual(values = c("slategray1","slategray")) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5), axis.text.x = element_text(angle = 90, hjust = 1))
+```

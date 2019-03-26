@@ -1,4 +1,4 @@
-Year,Site,Transect,Code,Species,Common name,Family,Length cm,a,b,Biomass
+ï»¿Year,Site,Transect,Code,Species,Common name,Family,Length cm,a,b,Biomass
 2015,Bachelor's Beach,1,TrF,Aulostomus maculatus,Trumpet Fish,Aulostomidae,24,0.004,2.865,35.64514563
 2015,Bachelor's Beach,1,TrF,Aulostomus maculatus,Trumpet Fish,Aulostomidae,36,0.004,2.865,113.8942635
 2015,Bachelor's Beach,2,TrF,Aulostomus maculatus,Trumpet Fish,Aulostomidae,24,0.004,2.865,35.64514563
@@ -3524,7 +3524,7 @@ Year,Site,Transect,Code,Species,Common name,Family,Length cm,a,b,Biomass
 2017,Forest,7,NA,Halichoeres garnoti,Yellowhead Wrasse,Labridae,8,0.01,3.13,6.709214228
 2017,Forest,7,NA,Halichoeres garnoti,Yellowhead Wrasse,Labridae,10,0.01,3.13,13.48962883
 2017,Forest,7,NA,Halichoeres garnoti,Yellowhead Wrasse,Labridae,12,0.01,3.13,23.86916904
-2017,Forest,4,NA,Halichoeres maculipinna ,Clown Wrasse,Labridae,10,0.01047,3.2,16.59383173
+2017,Forest,4,NA,Halichoeres maculipinnaâ€ ,Clown Wrasse,Labridae,10,0.01047,3.2,16.59383173
 2017,Forest,2,NA,Thalassoma bifasciatum,Bluehead Wrasse,Labridae,4,0.0107,2.916,0.609523862
 2017,Forest,5,NA,Thalassoma bifasciatum,Bluehead Wrasse,Labridae,9,0.0107,2.916,6.485671312
 2017,Forest,5,NA,Thalassoma bifasciatum,Bluehead Wrasse,Labridae,9,0.0107,2.916,6.485671312
@@ -4325,7 +4325,7 @@ Year,Site,Transect,Code,Species,Common name,Family,Length cm,a,b,Biomass
 2017,Karpata,6,NA,Halichoeres garnoti,Yellowhead Wrasse,Labridae,12,0.01,3.13,23.86916904
 2017,Karpata,7,NA,Halichoeres garnoti,Yellowhead Wrasse,Labridae,11,0.01,3.13,18.17854437
 2017,Karpata,7,NA,Halichoeres garnoti,Yellowhead Wrasse,Labridae,12,0.01,3.13,23.86916904
-2017,Karpata,3,NA,Halichoeres maculipinna ,Clown Wrasse,Labridae,NA,0.01047,3.2,0
+2017,Karpata,3,NA,Halichoeres maculipinnaâ€ ,Clown Wrasse,Labridae,NA,0.01047,3.2,0
 2017,Karpata,1,NA,Thalassoma bifasciatum,Bluehead Wrasse,Labridae,3,0.0107,2.916,0.263432502
 2017,Karpata,1,NA,Thalassoma bifasciatum,Bluehead Wrasse,Labridae,3,0.0107,2.916,0.263432502
 2017,Karpata,1,NA,Thalassoma bifasciatum,Bluehead Wrasse,Labridae,3,0.0107,2.916,0.263432502

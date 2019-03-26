@@ -16,32 +16,47 @@ library(janitor)
 ```{r, echo=F, warning=F, message=F}
 fish <- read.csv(here('data','raw_2019.csv'), stringsAsFactors = F) %>% 
   clean_names() %>%
-  mutate(number = replace_na(number, 1)) %>%
+  mutate(number = replace_na(number, 1)) %>% # change count to 1 if number was not entered
   uncount(number) %>% # expand to replicate rows if multiple fish were recorded
-  mutate(year = as.factor(year))
+  mutate(year = as.factor(year)) %>%
+  filter(code != "brc" & code != "blc") # removing chromis for consistency
 
-herb_hist <- read_csv((here('data','herb_2011-2017.csv'))) %>% 
+herb_hist <- read.csv(here('data','herb_2011-2017.csv'), stringsAsFactors = F) %>% 
   clean_names() %>%
   select(c(year, site, transect, code, species, family, length_cm, phase, biomass))
-carn_hist <- read_csv((here('data','carn_2015-2017.csv'))) %>% 
+carn_hist <- read.csv(here('data','carn_2015-2017.csv'), stringsAsFactors = F) %>% 
   clean_names() %>%
   select(c(year, site, transect, code, species, family, length_cm, biomass))
+
+```
+
+
+```{r, echo=F, warning=F, message=F}
+# eventually incorporating Gretchen's YTD data because we did not record YTD in 2019: calculate average size of adults (above 8cm) from 2017, and apply to Gretchen's adult abundance data from 2019 (did not record sizes)
+
+ytd_size <- herb_hist %>% 
+  filter(year == 2017 & code == "ytd" & length_cm >= 8) %>%
+  summarize(l_av = mean(length_cm))
+# average adult length = 14cm
+
+# imporat Gretchen's summary .csv (by site): 
 ```
 
 # Herbivores
 
-```{r,message=FALSE,warning=FALSE}
+```{r, echo=F, warning=F, message=F}
 # merging historic and 2019 herbivore data:
 herb_fam <- c("Scaridae","Acanthuridae") # families of interest
 herb <- rbind(herb_hist, 
-              fish %>% select(c(year, site, transect, code, species, family, length_cm, phase, biomass))) %>% 
+              fish %>% 
+                select(c(year, site, transect, code, species, family, length_cm, phase, biomass_bh)) %>%
+                rename(biomass = biomass_bh)) %>% 
   filter(family %in% herb_fam) %>%
-  mutate(management = ifelse(site == "Calabas" | site == "Front Porch" | site == "Eighteenth Palm" | site == "Reef Scientifico", "FPA", "Control")) %>% 
-  mutate(site = fct_relevel(site, "Bachelor's Beach", "Windsock", "Eighteenth Palm", "Calabas", "Front Porch", "Forest", "Reef Scientifico", "Barcadera", "Oil Slick", "Karpata", "No-Dive Reserve"))
+  mutate(management = ifelse(site == "Calabas" | site == "Front Porch" | site == "18th Palm" | site == "Reef Scientifico", "FPA", "Control")) %>% 
+  mutate(site = fct_relevel(site, "Bachelor's Beach", "Windsock", "18th Palm", "Calabas", "Front Porch", "Forest", "Reef Scientifico", "Barcadera", "Oil Slick Leap", "Karpata", "No Dive Reserve"))
 
 # averages by site and year:
 herb.tran <- herb %>% 
-  filter(biomass != 0) %>% 
   group_by(year, site, transect) %>% 
   summarize(bm_t = sum(biomass)/1.2, 
             den_t = n()/1.2, 
@@ -59,15 +74,128 @@ herb.yr <- herb.site %>%
             den_av = mean(den_s), den_se = (sd(den_s))/sqrt(n), 
             l_av = mean(l_s), l_se = (sd(l_s))/sqrt(n))
 
-# herb.bonav <- herb.bonav %>% mutate(site = "Bonaire Average") %>% rename(bm_s = bm_av, den_s = den_av, l_s = l_av) %>% bind_rows(herb.site)
+herb.site <- herb.site %>% 
+  bind_rows(herb.yr %>% 
+              mutate(site = "Bonaire Average") %>%
+              rename(bm_s = bm_av, den_s = den_av, l_s = l_av))
+# write.csv(here('data', herb.site %>% filter(year==2019), file = 'sum_2019.csv'))
+write.csv(herb.site %>% filter(year==2019), file = 'sum_2019.csv')
 ```
 
-```{r}
+```{r, echo=F, warning=F, message=F}
 dodge <- position_dodge(width=0.9)
-ggplot(herb.site, aes(x=site, y = bm_s, group = year, fill = year)) +
+ggplot(herb.yr, aes(x=year, y = bm_av)) +
+ geom_bar(position = dodge, stat = "identity", fill = "slategray") + 
+  geom_errorbar(aes(ymax = bm_av + bm_se, ymin = bm_av - bm_se), position = dodge, width = 0.25) +
+  ggtitle("Average Herbivore Biomass by Year") +
+  ylab("Biomass (g/100m2)") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+```{r, echo=F, warning=F, message=F, width = 8}
+dodge <- position_dodge(width=0.9)
+ggplot(herb.site, aes(x=year, y = bm_s, group = year, fill = year)) +
  geom_bar(position = dodge, stat = "identity") + 
+  facet_grid(.~site, labeller = labeller(site = label_wrap_gen(8))) +
   geom_errorbar(aes(ymax = bm_s + bm_se, ymin = bm_s - bm_se), position = dodge, width = 0.25) +
   ggtitle("Total Herbivore Biomass by Site, 2011-2019") +
+  ylab("Biomass (g/100m2)") +
+  scale_fill_manual(values = c("slategray1","slategray2","slategray3","slategray","grey15")) +
+  theme_bw() +
+  theme(axis.text.x = element_blank(),
+        axis.title.x = element_blank(),
+        plot.title = element_text(hjust = 0.5))
+```
+
+```{r, echo=F, warning=F, message=F}
+dodge <- position_dodge(width=0.9)
+ggplot(herb.site, aes(x=year, y = den_s, group = year, fill = year)) +
+ geom_bar(position = dodge, stat = "identity") + 
+  facet_grid(.~site, labeller = labeller(site = label_wrap_gen(8))) +
+  geom_errorbar(aes(ymax = den_s + den_se, ymin = den_s - den_se), position = dodge, width = 0.25) +
+  ggtitle("Total Herbivore Density by Site, 2011-2019") +
+  ylab("Density (indv./100m2)") +
+  scale_fill_manual(values = c("slategray1","slategray2","slategray3","slategray","grey15")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), plot.title = element_text(hjust = 0.5))
+```
+
+## Trends by family
+
+```{r, echo=F, warning=F, message=F}
+# set up expanded table with all possible site-transect-species/family combinations to calculate family- and species- level averages
+hexp.tran <- herb %>% group_by(year, site, transect) %>% summarize()
+htemp.species <- full_join(herb %>% expand(species, site, year), hexp.tran, by = c("year","site")) %>%
+  filter(!(site == "Windsock" & year == 2011)) # no data from Windsock 2011
+htemp.fam <- full_join(herb %>% expand(family, site, year), hexp.tran, by=c("year","site")) %>%
+  filter(!(site == "Windsock" & year == 2011))
+```
+
+```{r, echo=F, warning=F, message=F}
+hfam.tran <- herb %>% 
+  group_by(year, site, management, transect, family) %>% 
+  summarize(bm_t = sum(biomass)/1.2, 
+            den_t = n()/1.2) %>% 
+  right_join(htemp.fam, by=c("year","site","transect","family")) %>% # join with template containing all possible species/transect combinations
+  replace(., is.na(.), 0) # convert NAs to 0 biomass/density in transects where a species is not present
+hfam.site <- hfam.tran %>% 
+  group_by(year, site, family) %>% 
+    summarize(n = n(), 
+            bm_s = mean(bm_t), bm_se = (sd(bm_t))/sqrt(n), 
+            den_s = mean(den_t), den_se = (sd(den_t))/sqrt(n)) %>%
+    filter(bm_s != 0) # currently missing data from some sites (3/20/19)
+hfam.yr <- hfam.site %>% 
+  group_by(year, family) %>% 
+  summarize(n = n(), 
+            bm_av = mean(bm_s), bm_se=(sd(bm_s))/sqrt(n), 
+            den_av = mean(den_s), den_se = (sd(den_s))/sqrt(n))
+
+hfam.l.tran <- herb %>% 
+  group_by(year, site, management, transect, family) %>% 
+  summarize(l_t=mean(length_cm)) # average length must be calculated separately because transects without a species representative does not mean average length will be 0
+hfam.l.site <- hfam.l.tran %>% 
+  group_by(year, site, management, family) %>% 
+  summarize(l_n = n(),
+            l_s = mean(l_t), 
+            l_se=(sd(l_t))/sqrt(l_n))
+hfam.l.yr <- hfam.l.site %>% 
+  group_by(year, family) %>% 
+  summarize(l_n = n(),
+            l_av = mean(l_s), 
+            l_se = (sd(l_s))/sqrt(l_n))
+
+hfam.site <- hfam.site %>% left_join(hfam.l.site) # sample size may be different for length (l_n - only transects where species was observed) vs. biomass/density (n - all transects) calculations
+hfam.yr <- hfam.yr %>% left_join(hfam.l.yr)
+
+hfam.site <- hfam.site %>% 
+  bind_rows(hfam.yr %>% 
+              mutate(site = "Bonaire Average") %>%
+              rename(bm_s = bm_av, den_s = den_av, l_s = l_av))
+
+# write.csv(here('data', hfam.site %>% filter(year==2019), file = 'sum_2019.csv'))
+write.csv(hfam.site %>% filter(year==2019), file = 'sum_fam_2019.csv')
+```
+
+### Scarids only
+
+```{r, echo=F, warning=F, message=F}
+dodge <- position_dodge(width=0.9)
+ggplot(hfam.yr %>% filter(family == "Scaridae"), aes(x=year, y = bm_av)) +
+ geom_bar(position = dodge, stat = "identity", fill = "slategray4") + 
+  geom_errorbar(aes(ymax = bm_av + bm_se, ymin = bm_av - bm_se), position = dodge, width = 0.25) +
+  ggtitle("Average Scarid Biomass by Year") +
+  ylab("Biomass (g/100m2)") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+```{r, echo=F, warning=F, message=F}
+dodge <- position_dodge(width=0.9)
+ggplot(hfam.site %>% filter(family == "Scaridae"), aes(x=year, y = bm_s, group = year, fill = year)) +
+ geom_bar(position = dodge, stat = "identity") + 
+  facet_grid(.~site, labeller = labeller(site = label_wrap_gen(8))) +
+  geom_errorbar(aes(ymax = bm_s + bm_se, ymin = bm_s - bm_se), position = dodge, width = 0.25) +
+  ggtitle("Scarid Biomass by Site, 2011-2019") +
   ylab("Biomass (g/100m2)") +
   scale_fill_manual(values = c("slategray1","slategray2","slategray3","slategray","grey15")) +
   theme_bw() +
@@ -75,30 +203,118 @@ ggplot(herb.site, aes(x=site, y = bm_s, group = year, fill = year)) +
 ```
 
 
+```{r, echo=F, warning=F, message=F}
+ggplot(hfam.site %>% filter(family == "Scaridae"), aes(x = year, y = bm_s, group = site)) +
+ geom_point(aes(color = factor(site))) + 
+  geom_line(aes(color = factor(site))) +
+  ggtitle("Scarid Biomass, 2011 - 2019") +
+  ylab("Biomass (g/100m2)") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), plot.title = element_text(hjust = 0.5))
+```
+
+```{r, echo=F, warning=F, message=F}
+dodge <- position_dodge(width=0.9)
+ggplot(hfam.site %>% filter(family == "Scaridae"), aes(x=year, y = den_s, group = year, fill = year)) +
+ geom_bar(position = dodge, stat = "identity") + 
+  facet_grid(.~site, labeller = labeller(site = label_wrap_gen(8))) +
+  geom_errorbar(aes(ymax = den_s + den_se, ymin = den_s - den_se), position = dodge, width = 0.25) +
+  ggtitle("Scarid Density by Site, 2011-2019") +
+  ylab("Density (indv./100m2)") +
+  scale_fill_manual(values = c("slategray1","slategray2","slategray3","slategray","grey15")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), plot.title = element_text(hjust = 0.5))
+```
+
+### Acanthurids only
+
+```{r, echo=F, warning=F, message=F}
+dodge <- position_dodge(width=0.9)
+ggplot(hfam.site %>% filter(family == "Acanthuridae"), aes(x=year, y = bm_s, group = year, fill = year)) +
+ geom_bar(position = dodge, stat = "identity") + 
+  facet_grid(.~site, labeller = labeller(site = label_wrap_gen(8))) +
+  geom_errorbar(aes(ymax = bm_s + bm_se, ymin = bm_s - bm_se), position = dodge, width = 0.25) +
+  ggtitle("Acanthurid Biomass by Site, 2011-2019") +
+  ylab("Biomass (g/100m2)") +
+  scale_fill_manual(values = c("slategray1","slategray2","slategray3","slategray","grey15")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), plot.title = element_text(hjust = 0.5))
+```
+
+## Trends by species
+
+```{r, echo=F, warning=F, message=F}
+# by site and family:
+hspec.tran <- herb %>% 
+  group_by(year, site, transect, species) %>% 
+  summarize(bm_t = sum(biomass)/1.2, 
+            den_t = n()/1.2) %>% 
+  right_join(htemp.species, by=c("year","site","transect","species")) %>% # join with template containing all possible species/transect combinations
+  replace(., is.na(.), 0) # convert NAs to 0 biomass/density in transects where a species is not present
+hspec.site <- hspec.tran %>% 
+  group_by(year, site, species) %>% 
+    summarize(n = n(), 
+            bm_s = mean(bm_t), bm_se = (sd(bm_t))/sqrt(n), 
+            den_s = mean(den_t), den_se = (sd(den_t))/sqrt(n)) %>%
+  filter(bm_s != 0) # currently missing data from some sites (3/20/19)
+hspec.yr <- hspec.site %>% 
+  group_by(year, species) %>% 
+  summarize(n = n(), 
+            bm_av = mean(bm_s), bm_se=(sd(bm_s))/sqrt(n), 
+            den_av = mean(den_s), den_se = (sd(den_s))/sqrt(n))
+
+hspec.l.tran <- herb %>% 
+  group_by(year, site, transect, species) %>% 
+  summarize(l_t=mean(length_cm)) # average length must be calculated separately because transects without a species representative does not mean average length will be 0
+hspec.l.site <- hspec.l.tran %>% 
+  group_by(year, site, species) %>% 
+  summarize(l_n = n(),
+            l_s = mean(l_t), 
+            l_se=(sd(l_t))/sqrt(l_n))
+hspec.l.yr <- hspec.l.site %>% 
+  group_by(year, species) %>% 
+  summarize(l_n = n(),
+            l_av = mean(l_s), 
+            l_se = (sd(l_s))/sqrt(l_n))
+
+hspec.site <- hspec.site %>% left_join(hspec.l.site) # sample size will be different for length (L.n - only transects where species was observed) vs. biomass/density (n - all transects) calculations
+hspec.yr <- hspec.yr %>% left_join(hspec.l.yr)
+```
+
 # Carnivores
 
-```{r}
+```{r, echo=F, warning=F, message=F}
 # merging historic and 2019 carnivore data
-carn_grp <- c("Carnivore","Omnivore") # functional groups of interest
+carn_fam <- c("Haemulidae","Lutjanidae","Serranidae") # focal families
+carn_group <- c("Carnivore","Omnivore") # this is what Robert + Max used for 2017 report (hence higher bm/den values)
+
 carn <- rbind(carn_hist, 
-              fish %>% filter(functional_group %in% carn_grp) %>%
-                select(c(year, site, transect, code, species, family, length_cm, biomass))) %>% 
+              fish %>% 
+                filter(functional_group %in% carn_group) %>% # to compare with past years
+                select(c(year, site, transect, code, species, family, length_cm, biomass_fb)) %>%
+                rename(biomass = biomass_fb)) %>% 
   mutate(management = ifelse(site == "Calabas" | site == "Front Porch" | site == "Eighteenth Palm" | site == "Reef Scientifico", "FPA", "Control")) %>%
   mutate(site = fct_relevel(site, "Bachelor's Beach", "Windsock", "Eighteenth Palm", "Calabas", "Front Porch", "Forest", "Reef Scientifico", "Barcadera", "Oil Slick", "Karpata", "No-Dive Reserve"))
 
 # averages by site and year:
 carn.tran <- carn %>% 
   filter(biomass != 0) %>% 
-  group_by(year, site, transect) %>% 
+  group_by(year, site, management, transect) %>% 
   summarize(bm_t = sum(biomass)/1.2, 
             den_t = n()/1.2, 
             l_t = mean(length_cm))
 carn.site <- carn.tran %>% 
-  group_by(year, site) %>% 
+  group_by(year, site, management) %>% 
   summarize(n = n(), 
             bm_s = mean(bm_t), bm_se = (sd(bm_t))/sqrt(n), 
             den_s = mean(den_t), den_se = (sd(den_t))/sqrt(n), 
             l_s = mean(l_t), l_se = (sd(l_t))/sqrt(n))
+carn.mgmt <- carn.site %>% 
+  group_by(year, management) %>% 
+  summarize(n = n(), 
+            bm_av = mean(bm_s), bm_se=(sd(bm_s))/sqrt(n), 
+            den_av = mean(den_s), den_se = (sd(den_s))/sqrt(n), 
+            l_av = mean(l_s), l_se = (sd(l_s))/sqrt(n))
 carn.yr <- carn.site %>% 
   group_by(year) %>% 
   summarize(n = n(), 
@@ -106,17 +322,80 @@ carn.yr <- carn.site %>%
             den_av = mean(den_s), den_se = (sd(den_s))/sqrt(n), 
             l_av = mean(l_s), l_se = (sd(l_s))/sqrt(n))
 
+carn.site <- carn.site %>% 
+  bind_rows(carn.yr %>% 
+              mutate(site = "Bonaire Average") %>%
+              rename(bm_s = bm_av, den_s = den_av, l_s = l_av))
+
+# write.csv(here('data', hfam.site %>% filter(year==2019), file = 'sum_2019.csv'))
+write.csv(carn.mgmt, file = 'sum_carnmgmt_2019.csv')
+write.csv(carn.site %>% filter(year==2019), file = 'sum_carn_2019.csv')
 ```
 
-```{r}
+```{r, echo=F, warning=F, message=F}
 dodge <- position_dodge(width=0.9)
-ggplot(carn.site, aes(x=site, y = bm_s, group = year, fill = year)) +
+ggplot(carn.mgmt, aes(x = year, y = den_av, group = management, fill = management)) +
  geom_bar(position = dodge, stat = "identity") + 
+  geom_errorbar(aes(ymax = den_av + den_se, ymin = den_av - den_se), position = dodge, width = 0.25) +
+  ggtitle("Average Carnivore Density in FPA and Control sites") +
+  ylab("Density (ind./100m2)") +
+  scale_fill_manual(values = c("slategray2","slategray")) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+```{r, echo=F, warning=F, message=F}
+dodge <- position_dodge(width=0.9)
+ggplot(carn.site, aes(x=year, y = bm_s, group = year, fill = year)) +
+ geom_bar(position = dodge, stat = "identity") + 
+  facet_grid(.~site, labeller = labeller(site = label_wrap_gen(8))) +
   geom_errorbar(aes(ymax = bm_s + bm_se, ymin = bm_s - bm_se), position = dodge, width = 0.25) +
-  ggtitle("Carnivore + Omnivore Biomass by Site, 2015-2019") +
+  ggtitle("Carnivore Biomass by Site, 2015-2019") +
   ylab("Biomass (g/100m2)") +
-  scale_fill_manual(values = c("slategray1","slategray3","grey15")) +
+  scale_fill_manual(values = c("slategray1","slategray4","grey15")) +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1), plot.title = element_text(hjust = 0.5))
+```
+
+```{r, echo=F, warning=F, message=F}
+# set up expanded table with all possible site-transect-species/family combinations to calculate family- and species- level averages
+cexp.tran <- carn %>% group_by(year, site, transect) %>% summarize()
+ctemp.species <- full_join(carn %>% expand(species, site, year), cexp.tran, by = c("year","site"))
+ctemp.fam <- full_join(carn %>% expand(family, site, year), cexp.tran, by=c("year","site"))
+```
+```{r, echo=F, warning=F, message=F}
+cfam.tran <- carn %>% 
+  group_by(year, site, management, transect, family) %>% 
+  summarize(bm_t = sum(biomass)/1.2, 
+            den_t = n()/1.2) %>% 
+  right_join(ctemp.fam, by=c("year","site","transect","family")) %>% # join with template containing all possible species/transect combinations
+  replace(., is.na(.), 0) # convert NAs to 0 biomass/density in transects where a species is not present
+cfam.site <- cfam.tran %>% 
+  group_by(year, site, family) %>% 
+    summarize(n = n(), 
+            bm_s = mean(bm_t), bm_se = (sd(bm_t))/sqrt(n), 
+            den_s = mean(den_t), den_se = (sd(den_t))/sqrt(n))
+cfam.yr <- cfam.site %>% 
+  group_by(year, family) %>% 
+  summarize(n = n(), 
+            bm_av = mean(bm_s), bm_se=(sd(bm_s))/sqrt(n), 
+            den_av = mean(den_s), den_se = (sd(den_s))/sqrt(n))
+
+cfam.l.tran <- carn %>% 
+  group_by(year, site, management, transect, family) %>% 
+  summarize(l_t=mean(length_cm)) # average length must be calculated separately because transects without a species representative does not mean average length will be 0
+cfam.l.site <- cfam.l.tran %>% 
+  group_by(year, site, management, family) %>% 
+  summarize(l_n = n(),
+            l_s = mean(l_t), 
+            l_se=(sd(l_t))/sqrt(l_n))
+cfam.l.yr <- cfam.l.site %>% 
+  group_by(year, family) %>% 
+  summarize(l_n = n(),
+            l_av = mean(l_s), 
+            l_se = (sd(l_s))/sqrt(l_n))
+
+cfam.site <- cfam.site %>% left_join(cfam.l.site) # sample size will be different for length (L.n - only transects where species was observed) vs. biomass/density (n - all transects) calculations
+cfam.yr <- cfam.yr %>% left_join(cfam.l.yr)
 ```
 
