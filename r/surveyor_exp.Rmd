@@ -25,7 +25,7 @@ fish <- read.csv(here('data','raw_2019.csv'), stringsAsFactors = F) %>%
 dodge <- position_dodge(width=0.9) # for bar graphs
 ```
 
-```{r}
+```{r, echo=F, warning=F, message=F}
 # total fish biomass, by site and surveyor
 surv.tran <- fish %>% 
   group_by(surveyor, site, transect) %>% 
@@ -71,14 +71,11 @@ c.surv.site <- c.surv.tran %>%
 
 ```
 
-```{r}
-ttest.bm <- t.test(bm_s ~ surveyor, data = surv.site, paired = TRUE)
-ttest.bm
+Notes: 
 
-ttest.den <- t.test(den_s ~ surveyor, data = surv.site, paired = TRUE)
-ttest.den
-```
-Paired t-test results: no significant difference between surveyors for total fish biomass nor total fish density (though nearly significant for biomass, with BDR having a higher mean than MWW)
+- BDR had a large school of creole wrasse (130 at 17cm each) and school of smallmouth grunts (33 at 17cm each) at Reef Scientifico (MWW had schools of both species but with fewer fish within the transect)  
+- BDR had large school (36) of acanthurids and a large barracuda (64cm) at Karpata  
+- BDR had school of black durgon (13 at 27cm each) at NDR, MWW had black durgon schools but mostly smaller individuals  
 
 ```{r, echo=F, warning=F, message=F}
 ggplot(surv.site, aes(x = site, y = bm_s, group = surveyor, fill = surveyor)) +
@@ -128,6 +125,17 @@ ggplot(surv.site, aes(x = site, y = den_s, group = surveyor, fill = surveyor)) +
 ```
 
 ```{r, echo=F, warning=F, message=F}
+ggplot(surv.site, aes(x = site, y = den_s, group = surveyor)) +
+ geom_point(aes(color = factor(surveyor), shape = factor(surveyor))) + 
+  geom_errorbar(aes(ymax = den_s + den_se, ymin = den_s - den_se, color = factor(surveyor)), width = 0.25) +
+  ggtitle("Total fish density") +
+  ylab("Density (indv./100m2)") +
+  scale_color_manual(values = c("aquamarine3","skyblue4")) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5), axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+```{r, echo=F, warning=F, message=F}
 ggplot(surv.site %>%
          filter(site != "Barcadera", site != "Calabas", site != "Forest"),
        aes(x = surveyor, y = den_s, group = site)) +
@@ -141,8 +149,7 @@ ggplot(surv.site %>%
 ```
 
 
-Notes:
-- Bryce had a large school (130) of creole wrasse (17cm each) at Reef Scientifico
+
 ```{r, echo=F, warning=F, message=F}
 ggplot(surv.site, aes(x = site, y = den_s, group = surveyor)) +
  geom_point(aes(color = factor(surveyor), shape = factor(surveyor))) + 
@@ -153,6 +160,36 @@ ggplot(surv.site, aes(x = site, y = den_s, group = surveyor)) +
   theme_bw() +
   theme(plot.title = element_text(hjust = 0.5), axis.text.x = element_text(angle = 90, hjust = 1))
 ```
+
+```{r}
+dif.bm <- with(surv.site, 
+        bm_s[surveyor == "MWW"] - bm_s[surveyor == "BDR"])
+shapiro.test(dif.bm) # normal distribution
+
+ttest.bm <- t.test(bm_s ~ surveyor, data = surv.site, paired = TRUE)
+ttest.bm
+```
+
+```{r}
+dif.den <- with(surv.site, 
+        den_s[surveyor == "MWW"] - den_s[surveyor == "BDR"])
+shapiro.test(dif.den) # normal distribution
+
+ttest.den <- t.test(den_s ~ surveyor, data = surv.site, paired = TRUE)
+ttest.den
+```
+
+```{r}
+dif.len <- with(surv.site, 
+        l_s[surveyor == "MWW"] - l_s[surveyor == "BDR"])
+shapiro.test(dif.len) # normal distribution
+
+ttest.len <- t.test(l_s ~ surveyor, data = surv.site, paired = TRUE)
+ttest.len 
+```
+Paired t-test results: no significant difference between surveyors for total fish biomass, total fish density, nor average fish length (though nearly significant for biomass, with BDR having a higher mean than MWW)
+
+### Herbivores
 
 ```{r, echo=F, warning=F, message=F}
 ggplot(h.surv.site, aes(x = site, y = bm_s, group = surveyor, fill = surveyor)) +
@@ -176,6 +213,7 @@ ggplot(h.surv.site, aes(x = site, y = den_s, group = surveyor, fill = surveyor))
   theme(plot.title = element_text(hjust = 0.5), axis.text.x = element_text(angle = 90, hjust = 1))
 ```
 
+### Carnivores + omnivores
 
 ```{r, echo=F, warning=F, message=F}
 ggplot(c.surv.site, aes(x = site, y = bm_s, group = surveyor, fill = surveyor)) +
