@@ -19,7 +19,7 @@ fish <- read.csv(here('data','raw_2019.csv'), stringsAsFactors = F) %>%
   mutate(number = replace_na(number, 1)) %>% # change count to 1 if number was not entered
   uncount(number) %>% # expand to replicate rows if multiple fish were recorded
   mutate(year = as.factor(year)) %>%
-  filter(code != "brc" & code != "blc") # removing chromis for consistency
+  filter(code != "brc" & code != "blc") # removing chromis for consistency 
 
 herb_hist <- read.csv(here('data','herb_2011-2017.csv'), stringsAsFactors = F) %>% 
   clean_names() %>%
@@ -57,7 +57,7 @@ herb <- rbind(herb_hist,
 
 # averages by site and year:
 herb.tran <- herb %>% 
-  group_by(year, site, transect) %>% 
+  group_by(year, site, transect, surveyor) %>% 
   summarize(bm_t = sum(biomass)/1.2, 
             den_t = n()/1.2, 
             l_t = mean(length_cm))
@@ -134,7 +134,7 @@ htemp.fam <- full_join(herb %>% expand(family, site, year), hexp.tran, by=c("yea
 
 ```{r, echo=F, warning=F, message=F}
 hfam.tran <- herb %>% 
-  group_by(year, site, management, transect, family) %>% 
+  group_by(year, site, transect, family) %>% 
   summarize(bm_t = sum(biomass)/1.2, 
             den_t = n()/1.2) %>% 
   right_join(htemp.fam, by=c("year","site","transect","family")) %>% # join with template containing all possible species/transect combinations
@@ -152,10 +152,10 @@ hfam.yr <- hfam.site %>%
             den_av = mean(den_s), den_se = (sd(den_s))/sqrt(n))
 
 hfam.l.tran <- herb %>% 
-  group_by(year, site, management, transect, family) %>% 
+  group_by(year, site, transect, family) %>% 
   summarize(l_t=mean(length_cm)) # average length must be calculated separately because transects without a species representative does not mean average length will be 0
 hfam.l.site <- hfam.l.tran %>% 
-  group_by(year, site, management, family) %>% 
+  group_by(year, site, family) %>% 
   summarize(l_n = n(),
             l_s = mean(l_t), 
             l_se=(sd(l_t))/sqrt(l_n))
@@ -285,7 +285,6 @@ hspec.yr <- hspec.yr %>% left_join(hspec.l.yr)
 
 ```{r, echo=F, warning=F, message=F}
 # merging historic and 2019 carnivore data
-carn_fam <- c("Haemulidae","Lutjanidae","Serranidae") # focal families
 carn_group <- c("Carnivore","Omnivore") # this is what Robert + Max used for 2017 report (hence higher bm/den values)
 
 carn <- rbind(carn_hist, 
@@ -293,8 +292,8 @@ carn <- rbind(carn_hist,
                 filter(functional_group %in% carn_group) %>% # to compare with past years
                 select(c(year, site, transect, code, species, family, length_cm, biomass_fb)) %>%
                 rename(biomass = biomass_fb)) %>% 
-  mutate(management = ifelse(site == "Calabas" | site == "Front Porch" | site == "Eighteenth Palm" | site == "Reef Scientifico", "FPA", "Control")) %>%
-  mutate(site = fct_relevel(site, "Bachelor's Beach", "Windsock", "Eighteenth Palm", "Calabas", "Front Porch", "Forest", "Reef Scientifico", "Barcadera", "Oil Slick", "Karpata", "No-Dive Reserve"))
+  mutate(management = ifelse(site == "Calabas" | site == "Front Porch" | site == "18th Palm" | site == "Reef Scientifico", "FPA", "Control")) %>% 
+  mutate(site = fct_relevel(site, "Bachelor's Beach", "Windsock", "18th Palm", "Calabas", "Front Porch", "Forest", "Reef Scientifico", "Barcadera", "Oil Slick Leap", "Karpata", "No Dive Reserve"))
 
 # averages by site and year:
 carn.tran <- carn %>% 
@@ -362,10 +361,10 @@ ggplot(carn.site, aes(x=year, y = bm_s, group = year, fill = year)) +
 cexp.tran <- carn %>% group_by(year, site, transect) %>% summarize()
 ctemp.species <- full_join(carn %>% expand(species, site, year), cexp.tran, by = c("year","site"))
 ctemp.fam <- full_join(carn %>% expand(family, site, year), cexp.tran, by=c("year","site"))
-```
-```{r, echo=F, warning=F, message=F}
+
+
 cfam.tran <- carn %>% 
-  group_by(year, site, management, transect, family) %>% 
+  group_by(year, site, transect, family) %>% 
   summarize(bm_t = sum(biomass)/1.2, 
             den_t = n()/1.2) %>% 
   right_join(ctemp.fam, by=c("year","site","transect","family")) %>% # join with template containing all possible species/transect combinations
@@ -382,10 +381,10 @@ cfam.yr <- cfam.site %>%
             den_av = mean(den_s), den_se = (sd(den_s))/sqrt(n))
 
 cfam.l.tran <- carn %>% 
-  group_by(year, site, management, transect, family) %>% 
+  group_by(year, site, transect, family) %>% 
   summarize(l_t=mean(length_cm)) # average length must be calculated separately because transects without a species representative does not mean average length will be 0
 cfam.l.site <- cfam.l.tran %>% 
-  group_by(year, site, management, family) %>% 
+  group_by(year, site, family) %>% 
   summarize(l_n = n(),
             l_s = mean(l_t), 
             l_se=(sd(l_t))/sqrt(l_n))
@@ -397,5 +396,6 @@ cfam.l.yr <- cfam.l.site %>%
 
 cfam.site <- cfam.site %>% left_join(cfam.l.site) # sample size will be different for length (L.n - only transects where species was observed) vs. biomass/density (n - all transects) calculations
 cfam.yr <- cfam.yr %>% left_join(cfam.l.yr)
+write.csv(cfam.site %>% filter(year==2019 & family!="Pomacentridae"), file = 'sum_cfam_2019.csv')
 ```
 
