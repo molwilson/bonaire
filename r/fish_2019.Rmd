@@ -57,7 +57,7 @@ herb <- rbind(herb_hist,
 
 # averages by site and year:
 herb.tran <- herb %>% 
-  group_by(year, site, transect, surveyor) %>% 
+  group_by(year, site, transect) %>% 
   summarize(bm_t = sum(biomass)/1.2, 
             den_t = n()/1.2, 
             l_t = mean(length_cm))
@@ -79,7 +79,7 @@ herb.site <- herb.site %>%
               mutate(site = "Bonaire Average") %>%
               rename(bm_s = bm_av, den_s = den_av, l_s = l_av))
 # write.csv(here('data', herb.site %>% filter(year==2019), file = 'sum_2019.csv'))
-write.csv(herb.site %>% filter(year==2019), file = 'sum_2019.csv')
+write.csv(herb.site %>% filter(year==2019), file = 'sum_herb_2019.csv')
 ```
 
 ```{r, echo=F, warning=F, message=F}
@@ -174,7 +174,7 @@ hfam.site <- hfam.site %>%
               rename(bm_s = bm_av, den_s = den_av, l_s = l_av))
 
 # write.csv(here('data', hfam.site %>% filter(year==2019), file = 'sum_2019.csv'))
-write.csv(hfam.site %>% filter(year==2019), file = 'sum_fam_2019.csv')
+write.csv(hfam.site %>% filter(year==2019), file = 'sum_hfam_2019.csv')
 ```
 
 ### Scarids only
@@ -286,10 +286,15 @@ hspec.yr <- hspec.yr %>% left_join(hspec.l.yr)
 ```{r, echo=F, warning=F, message=F}
 # merging historic and 2019 carnivore data
 carn_group <- c("Carnivore","Omnivore") # this is what Robert + Max used for 2017 report (hence higher bm/den values)
+carn_fam <- c("Haemulidae","Lutjanidae","Serranidae")
 
-carn <- rbind(carn_hist, 
+
+carn <- rbind(carn_hist 
+              #%>% filter(family %in% carn_fam)
+              , 
               fish %>% 
                 filter(functional_group %in% carn_group) %>% # to compare with past years
+                #filter(family %in% carn_fam) %>%
                 select(c(year, site, transect, code, species, family, length_cm, biomass_fb)) %>%
                 rename(biomass = biomass_fb)) %>% 
   mutate(management = ifelse(site == "Calabas" | site == "Front Porch" | site == "18th Palm" | site == "Reef Scientifico", "FPA", "Control")) %>% 
@@ -338,6 +343,18 @@ ggplot(carn.mgmt, aes(x = year, y = den_av, group = management, fill = managemen
   geom_errorbar(aes(ymax = den_av + den_se, ymin = den_av - den_se), position = dodge, width = 0.25) +
   ggtitle("Average Carnivore Density in FPA and Control sites") +
   ylab("Density (ind./100m2)") +
+  scale_fill_manual(values = c("slategray2","slategray")) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+```{r, echo=F, warning=F, message=F}
+dodge <- position_dodge(width=0.9)
+ggplot(carn.mgmt, aes(x = year, y = bm_av, group = management, fill = management)) +
+ geom_bar(position = dodge, stat = "identity") + 
+  geom_errorbar(aes(ymax = bm_av + bm_se, ymin = bm_av - bm_se), position = dodge, width = 0.25) +
+  ggtitle("Average Carnivore Biomass in FPA and Control sites") +
+  ylab("Biomass (ind./100m2)") +
   scale_fill_manual(values = c("slategray2","slategray")) +
   theme_bw() +
   theme(plot.title = element_text(hjust = 0.5))
