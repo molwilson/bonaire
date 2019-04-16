@@ -414,5 +414,40 @@ cfam.l.yr <- cfam.l.site %>%
 cfam.site <- cfam.site %>% left_join(cfam.l.site) # sample size will be different for length (L.n - only transects where species was observed) vs. biomass/density (n - all transects) calculations
 cfam.yr <- cfam.yr %>% left_join(cfam.l.yr)
 write.csv(cfam.site %>% filter(year==2019 & family!="Pomacentridae"), file = 'sum_cfam_2019.csv')
+
+target <- carn %>% 
+  filter(family %in% carn_fam & year == 2019) %>%
+  group_by(site, transect) %>%
+  summarize(bm_t = sum(biomass)/1.2, 
+            den_t = n()/1.2) %>%
+  group_by(site) %>%
+  summarize(n = n(), 
+            bm_s = mean(bm_t), bm_se = (sd(bm_t))/sqrt(n), 
+            den_s = mean(den_t), den_se = (sd(den_t))/sqrt(n))
+
+target <- carn %>% 
+  filter(family %in% carn_fam & year == 2019) %>%
+  group_by(site, transect) %>%
+  summarize(bm_t = sum(biomass)/1.2, 
+            den_t = n()/1.2) %>%
+  right_join(cexp.tran %>% filter(year == 2019), by=c("site","transect")) %>%
+  replace(., is.na(.), 0) %>%
+  group_by(site) %>%
+  summarize(n = n(), 
+            bm_s = mean(bm_t), bm_se = (sd(bm_t))/sqrt(n), 
+            den_s = mean(den_t), den_se = (sd(den_t))/sqrt(n))
+
+graysby <- carn  %>% 
+  filter(species == "Cephalopholis cruentata" & year == 2019) %>%
+  group_by(site, transect) %>%
+  summarize(bm_t = sum(biomass)/1.2, 
+            den_t = n()/1.2) %>%
+  right_join(cexp.tran %>% filter(year == 2019), by=c("site","transect")) %>%
+  replace(., is.na(.), 0) %>%
+  group_by(site) %>%
+  summarize(n = n(), 
+            bm_s = mean(bm_t), bm_se = (sd(bm_t))/sqrt(n), 
+            den_s = mean(den_t), den_se = (sd(den_t))/sqrt(n))
+  
 ```
 
