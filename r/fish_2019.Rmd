@@ -10,10 +10,7 @@ library(tidyverse)
 library(ggplot2)
 library(here)
 library(janitor)
-```
 
-
-```{r, echo=F, warning=F, message=F}
 fish <- read.csv(here('data','raw_2019.csv'), stringsAsFactors = F) %>% 
   clean_names() %>%
   mutate(number = replace_na(number, 1)) %>% # change count to 1 if number was not entered
