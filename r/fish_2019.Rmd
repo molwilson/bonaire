@@ -28,17 +28,6 @@ carn_hist <- read.csv(here('data','carn_2015-2017.csv'), stringsAsFactors = F) %
 ```
 
 
-```{r, echo=F, warning=F, message=F}
-# eventually incorporating Gretchen's YTD data because we did not record YTD in 2019: calculate average size of adults (above 8cm) from 2017, and apply to Gretchen's adult abundance data from 2019 (did not record sizes)
-
-ytd_size <- herb_hist %>% 
-  filter(year == 2017 & code == "ytd" & length_cm >= 8) %>%
-  summarize(l_av = mean(length_cm))
-# average adult length = 14cm
-
-# imporat Gretchen's summary .csv (by site): 
-```
-
 # Herbivores
 
 ```{r, echo=F, warning=F, message=F}
@@ -394,6 +383,7 @@ cfam.yr <- cfam.site %>%
             bm_av = mean(bm_s), bm_se=(sd(bm_s))/sqrt(n), 
             den_av = mean(den_s), den_se = (sd(den_s))/sqrt(n))
 
+
 cfam.l.tran <- carn %>% 
   group_by(year, site, transect, family) %>% 
   summarize(l_t=mean(length_cm)) # average length must be calculated separately because transects without a species representative does not mean average length will be 0
@@ -445,6 +435,11 @@ graysby <- carn  %>%
   summarize(n = n(), 
             bm_s = mean(bm_t), bm_se = (sd(bm_t))/sqrt(n), 
             den_s = mean(den_t), den_se = (sd(den_t))/sqrt(n))
+
+hls.tran <- cfam.tran %>%
+  filter(family %in% carn_fam & year == 2019)
+hls.site <- cfam.site %>%
+  filter(family %in% carn_fam & year == 2019)
   
 ```
 
