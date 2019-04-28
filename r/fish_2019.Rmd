@@ -440,6 +440,8 @@ hls.tran <- cfam.tran %>%
   filter(family %in% carn_fam & year == 2019)
 hls.site <- cfam.site %>%
   filter(family %in% carn_fam & year == 2019)
+
+write.csv(hls.site, file = 'hls_site_2019.csv')
   
 ```
 
