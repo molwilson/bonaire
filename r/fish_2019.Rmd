@@ -39,7 +39,8 @@ herb <- rbind(herb_hist,
                 rename(biomass = biomass_bh)) %>% 
   filter(family %in% herb_fam) %>%
   mutate(management = ifelse(site == "Calabas" | site == "Front Porch" | site == "18th Palm" | site == "Reef Scientifico", "FPA", "Control")) %>% 
-  mutate(site = fct_relevel(site, "Bachelor's Beach", "Windsock", "18th Palm", "Calabas", "Front Porch", "Forest", "Reef Scientifico", "Barcadera", "Oil Slick Leap", "Karpata", "No Dive Reserve"))
+  mutate(site = fct_relevel(site, "Bachelor's Beach", "Windsock", "18th Palm", "Calabas", "Front Porch", "Forest", "Reef Scientifico", "Barcadera", "Oil Slick Leap", "Karpata", "No Dive Reserve")) %>%
+  mutate(biomass = as.numeric(biomass))
 
 # averages by site and year:
 herb.tran <- herb %>% 
@@ -231,40 +232,42 @@ ggplot(hfam.site %>% filter(family == "Acanthuridae"), aes(x=year, y = bm_s, gro
 
 ```{r, echo=F, warning=F, message=F}
 # by site and family:
-hspec.tran <- herb %>% 
+hsp.tran <- herb %>% 
   group_by(year, site, transect, species) %>% 
   summarize(bm_t = sum(biomass)/1.2, 
             den_t = n()/1.2) %>% 
   right_join(htemp.species, by=c("year","site","transect","species")) %>% # join with template containing all possible species/transect combinations
   replace(., is.na(.), 0) # convert NAs to 0 biomass/density in transects where a species is not present
-hspec.site <- hspec.tran %>% 
+hsp.site <- hsp.tran %>% 
   group_by(year, site, species) %>% 
     summarize(n = n(), 
             bm_s = mean(bm_t), bm_se = (sd(bm_t))/sqrt(n), 
             den_s = mean(den_t), den_se = (sd(den_t))/sqrt(n)) %>%
   filter(bm_s != 0) # currently missing data from some sites (3/20/19)
-hspec.yr <- hspec.site %>% 
+hsp.yr <- hsp.site %>% 
   group_by(year, species) %>% 
   summarize(n = n(), 
             bm_av = mean(bm_s), bm_se=(sd(bm_s))/sqrt(n), 
             den_av = mean(den_s), den_se = (sd(den_s))/sqrt(n))
 
-hspec.l.tran <- herb %>% 
+hsp.l.tran <- herb %>% 
   group_by(year, site, transect, species) %>% 
   summarize(l_t=mean(length_cm)) # average length must be calculated separately because transects without a species representative does not mean average length will be 0
-hspec.l.site <- hspec.l.tran %>% 
+hsp.l.site <- hsp.l.tran %>% 
   group_by(year, site, species) %>% 
   summarize(l_n = n(),
             l_s = mean(l_t), 
             l_se=(sd(l_t))/sqrt(l_n))
-hspec.l.yr <- hspec.l.site %>% 
+hsp.l.yr <- hsp.l.site %>% 
   group_by(year, species) %>% 
   summarize(l_n = n(),
             l_av = mean(l_s), 
             l_se = (sd(l_s))/sqrt(l_n))
 
-hspec.site <- hspec.site %>% left_join(hspec.l.site) # sample size will be different for length (L.n - only transects where species was observed) vs. biomass/density (n - all transects) calculations
-hspec.yr <- hspec.yr %>% left_join(hspec.l.yr)
+hsp.site <- hsp.site %>% left_join(hsp.l.site) # sample size will be different for length (L.n - only transects where species was observed) vs. biomass/density (n - all transects) calculations
+hsp.yr <- hsp.yr %>% left_join(hsp.l.yr)
+
+write.csv(hsp.site %>% filter(year==2019), file = 'herb_sp_sum_2019.csv')
 ```
 
 # Carnivores
@@ -319,7 +322,7 @@ carn.site <- carn.site %>%
 
 # write.csv(here('data', hfam.site %>% filter(year==2019), file = 'sum_2019.csv'))
 write.csv(carn.mgmt, file = 'sum_carnmgmt_2019.csv')
-write.csv(carn.site %>% filter(year==2019), file = 'sum_carn_2019.csv')
+write.csv(carn.site, file = 'sum_carn_site.csv')
 ```
 
 ```{r, echo=F, warning=F, message=F}
@@ -359,6 +362,8 @@ ggplot(carn.site, aes(x=year, y = bm_s, group = year, fill = year)) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1), plot.title = element_text(hjust = 0.5))
 ```
 
+
+Carnivore family-level summary data
 ```{r, echo=F, warning=F, message=F}
 # set up expanded table with all possible site-transect-species/family combinations to calculate family- and species- level averages
 cexp.tran <- carn %>% group_by(year, site, transect) %>% summarize()
@@ -425,16 +430,17 @@ target <- carn %>%
             den_s = mean(den_t), den_se = (sd(den_t))/sqrt(n))
 
 graysby <- carn  %>% 
-  filter(species == "Cephalopholis cruentata" & year == 2019) %>%
-  group_by(site, transect) %>%
+  filter(species == "Cephalopholis cruentata") %>%
+  group_by(site, transect, year) %>%
   summarize(bm_t = sum(biomass)/1.2, 
             den_t = n()/1.2) %>%
-  right_join(cexp.tran %>% filter(year == 2019), by=c("site","transect")) %>%
+  right_join(cexp.tran, by=c("site","transect","year")) %>%
   replace(., is.na(.), 0) %>%
-  group_by(site) %>%
+  group_by(site, year) %>%
   summarize(n = n(), 
             bm_s = mean(bm_t), bm_se = (sd(bm_t))/sqrt(n), 
             den_s = mean(den_t), den_se = (sd(den_t))/sqrt(n))
+write.csv(graysby, file = 'graysby.csv')
 
 hls.tran <- cfam.tran %>%
   filter(family %in% carn_fam & year == 2019)
@@ -443,5 +449,33 @@ hls.site <- cfam.site %>%
 
 write.csv(hls.site, file = 'hls_site_2019.csv')
   
+```
+
+Carnivore species summary data by site
+```{r, echo=F, warning=F, message=F}
+csp.tran <- carn %>% 
+  group_by(year, site, transect, species) %>% 
+  summarize(bm_t = sum(biomass)/1.2, 
+            den_t = n()/1.2) %>% 
+  right_join(ctemp.species, by=c("year","site","transect","species")) %>% # join with template containing all possible species/transect combinations
+  replace(., is.na(.), 0) # convert NAs to 0 biomass/density in transects where a species is not present
+csp.site <- csp.tran %>% 
+  group_by(year, site, species) %>% 
+    summarize(n = n(), 
+            bm_s = mean(bm_t), bm_se = (sd(bm_t))/sqrt(n), 
+            den_s = mean(den_t), den_se = (sd(den_t))/sqrt(n))
+
+csp.l.tran <- carn %>% 
+  group_by(year, site, transect, species) %>% 
+  summarize(l_t=mean(length_cm)) # average length must be calculated separately because transects without a species representative does not mean average length will be 0
+csp.l.site <- csp.l.tran %>% 
+  group_by(year, site, species) %>% 
+  summarize(l_n = n(),
+            l_s = mean(l_t), 
+            l_se=(sd(l_t))/sqrt(l_n))
+
+csp.site <- csp.site %>% left_join(csp.l.site)
+
+write.csv(csp.site %>% filter(year==2019 & bm_s != 0), file = 'carn_sp_sum_2019.csv')
 ```
 
